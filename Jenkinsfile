@@ -38,7 +38,7 @@ pipeline {
         stage('Helm Deploy') {
             steps {
                 echo 'Deploying application using Helm'
-                sh 'helm upgrade --install enterprise-helm ./helm/enterprise-app -n enterprise-platform'
+                sh 'helm upgrade --install enterprise-helm ./helm/enterprise-app -n enterprise-platform --set image.tag=${BUILD_NUMBER}'
             }
         }
 
