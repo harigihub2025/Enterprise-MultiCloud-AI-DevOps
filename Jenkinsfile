@@ -1,64 +1,179 @@
 pipeline {
+
     agent any
 
     environment {
-        IMAGE_NAME = "enterprise-devops-app"
-        KUBECONFIG = "/tmp/kind-config"
+        IMAGE_NAME = 'enterprise-devops-app'
+        IMAGE_TAG  = "${BUILD_NUMBER}"
+        KUBECONFIG = '/tmp/kind-config'
+        KIND_CLUSTER = 'enterprise'
+        HELM_RELEASE = 'enterprise-helm'
+        K8S_NAMESPACE = 'enterprise-platform'
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                echo 'Source code checked out from GitHub'
+                echo '===== CHECKOUT SOURCE CODE ====='
+
+                checkout scm
+
+                echo 'Source code checkout completed successfully.'
             }
         }
 
         stage('Test') {
             steps {
-                echo 'Running application tests'
-                sh 'python3 -m pytest || true'
+                echo '===== RUN TESTS ====='
+
+                sh '''
+                    echo "Running application tests..."
+
+                    if [ -f requirements.txt ]; then
+                        python3 -m pytest || true
+                    else
+                        echo "No requirements.txt found. Skipping Python tests."
+                    fi
+
+                    echo "Test stage completed."
+                '''
             }
         }
 
         stage('Docker Build') {
             steps {
-                echo 'Building Docker image'
-                sh 'docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .'
+                echo '===== BUILD DOCKER IMAGE ====='
+
+                sh '''
+                    echo "Building Docker image..."
+                    echo "Image: ${IMAGE_NAME}:${IMAGE_TAG}"
+
+                    docker build \
+                        -t ${IMAGE_NAME}:${IMAGE_TAG} .
+
+                    echo "Docker image build completed successfully."
+                '''
             }
         }
 
         stage('Docker Verify') {
             steps {
-                echo 'Verifying Docker image'
-                sh 'docker images ${IMAGE_NAME}'
+                echo '===== VERIFY DOCKER IMAGE ====='
+
+                sh '''
+                    docker images | grep ${IMAGE_NAME}
+
+                    echo "Docker image verification completed."
+                '''
+            }
+        }
+
+        stage('Load Image into Kind') {
+            steps {
+                echo '===== LOAD DOCKER IMAGE INTO KIND ====='
+
+                sh '''
+                    echo "Loading image into Kind cluster..."
+                    echo "Cluster: ${KIND_CLUSTER}"
+                    echo "Image: ${IMAGE_NAME}:${IMAGE_TAG}"
+
+                    kind load docker-image \
+                        ${IMAGE_NAME}:${IMAGE_TAG} \
+                        --name ${KIND_CLUSTER}
+
+                    echo "Docker image successfully loaded into Kind."
+                '''
             }
         }
 
         stage('Helm Deploy') {
             steps {
-                echo 'Deploying application using Helm'
-                sh 'helm upgrade --install enterprise-helm ./helm/enterprise-app -n enterprise-platform --set image.tag=${BUILD_NUMBER}'
+                echo '===== HELM DEPLOYMENT ====='
+
+                sh '''
+                    echo "Deploying application using Helm..."
+
+                    helm upgrade --install \
+                        ${HELM_RELEASE} \
+                        ./helm/enterprise-app \
+                        -n ${K8S_NAMESPACE} \
+                        --set image.repository=${IMAGE_NAME} \
+                        --set image.tag=${IMAGE_TAG}
+
+                    echo "Helm deployment completed."
+                '''
             }
         }
 
         stage('Kubernetes Verify') {
             steps {
-                echo 'Verifying Kubernetes deployment'
-                sh 'kubectl rollout status deployment/enterprise-helm -n enterprise-platform --timeout=120s'
-                sh 'kubectl get pods -n enterprise-platform'
-                sh 'kubectl get service -n enterprise-platform'
+                echo '===== KUBERNETES VERIFICATION ====='
+
+                sh '''
+                    echo "Waiting for Kubernetes deployment rollout..."
+
+                    kubectl rollout status \
+                        deployment/${HELM_RELEASE} \
+                        -n ${K8S_NAMESPACE} \
+                        --timeout=120s
+
+                    echo ""
+                    echo "===== DEPLOYMENT ====="
+
+                    kubectl get deployment \
+                        ${HELM_RELEASE} \
+                        -n ${K8S_NAMESPACE}
+
+                    echo ""
+                    echo "===== PODS ====="
+
+                    kubectl get pods \
+                        -n ${K8S_NAMESPACE}
+
+                    echo ""
+                    echo "===== SERVICE ====="
+
+                    kubectl get service \
+                        ${HELM_RELEASE}-service \
+                        -n ${K8S_NAMESPACE}
+
+                    echo ""
+                    echo "Kubernetes verification completed successfully."
+                '''
             }
         }
     }
 
     post {
+
         success {
-            echo 'Enterprise Multi-Cloud AI DevOps Pipeline completed successfully!'
+            echo '''
+            ==========================================
+              CI/CD PIPELINE COMPLETED SUCCESSFULLY
+            ==========================================
+              Application : Enterprise Multi-Cloud AI DevOps Platform
+              Docker     : Build Successful
+              Kind       : Image Loaded Successfully
+              Helm       : Deployment Successful
+              Kubernetes : Rollout Successful
+            ==========================================
+            '''
         }
 
         failure {
-            echo 'Pipeline failed. Check Console Output.'
+            echo '''
+            ==========================================
+              CI/CD PIPELINE FAILED
+            ==========================================
+              Check the Jenkins console logs
+              for the failed stage.
+            ==========================================
+            '''
+        }
+
+        always {
+            echo '===== PIPELINE FINISHED ====='
         }
     }
 }
