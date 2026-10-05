@@ -4,9 +4,8 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'enterprise-devops-app'
-        IMAGE_TAG  = "${BUILD_NUMBER}"
+        IMAGE_TAG = "${BUILD_NUMBER}"
         KUBECONFIG = '/tmp/kind-config'
-        KIND_CLUSTER = 'enterprise'
         HELM_RELEASE = 'enterprise-helm'
         K8S_NAMESPACE = 'enterprise-platform'
     }
@@ -16,9 +15,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo '===== CHECKOUT SOURCE CODE ====='
-
                 checkout scm
-
                 echo 'Source code checkout completed successfully.'
             }
         }
@@ -65,24 +62,6 @@ pipeline {
                     docker images | grep ${IMAGE_NAME}
 
                     echo "Docker image verification completed."
-                '''
-            }
-        }
-
-        stage('Load Image into Kind') {
-            steps {
-                echo '===== LOAD DOCKER IMAGE INTO KIND ====='
-
-                sh '''
-                    echo "Loading image into Kind cluster..."
-                    echo "Cluster: ${KIND_CLUSTER}"
-                    echo "Image: ${IMAGE_NAME}:${IMAGE_TAG}"
-
-                    kind load docker-image \
-                        ${IMAGE_NAME}:${IMAGE_TAG} \
-                        --name ${KIND_CLUSTER}
-
-                    echo "Docker image successfully loaded into Kind."
                 '''
             }
         }
@@ -154,7 +133,6 @@ pipeline {
             ==========================================
               Application : Enterprise Multi-Cloud AI DevOps Platform
               Docker     : Build Successful
-              Kind       : Image Loaded Successfully
               Helm       : Deployment Successful
               Kubernetes : Rollout Successful
             ==========================================
