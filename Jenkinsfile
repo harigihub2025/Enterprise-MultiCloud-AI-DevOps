@@ -45,6 +45,7 @@ pipeline {
         stage('Kubernetes Verify') {
             steps {
                 echo 'Verifying Kubernetes deployment'
+                sh 'kubectl rollout status deployment/enterprise-helm -n enterprise-platform --timeout=120s'
                 sh 'kubectl get pods -n enterprise-platform'
                 sh 'kubectl get service -n enterprise-platform'
             }
