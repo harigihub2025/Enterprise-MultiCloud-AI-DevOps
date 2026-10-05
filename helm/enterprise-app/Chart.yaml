@@ -1,0 +1,11 @@
+apiVersion: v2
+
+name: enterprise-app
+
+description: Enterprise Multi-Cloud AI DevOps Platform
+
+type: application
+
+version: 1.0.0
+
+appVersion: "1.0.0"
