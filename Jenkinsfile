@@ -4,7 +4,8 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'enterprise-devops-app'
-        REGISTRY = 'kind-registry:5000'
+        PUSH_REGISTRY = 'localhost:5000'
+        K8S_REGISTRY = 'kind-registry:5000'
         IMAGE_TAG = "${BUILD_NUMBER}"
 
         KUBECONFIG = '/tmp/kind-config'
@@ -48,8 +49,6 @@ pipeline {
                 echo '===== BUILD DOCKER IMAGE ====='
 
                 sh '''
-                    echo "Building Docker image..."
-
                     docker build \
                         -t ${IMAGE_NAME}:${IMAGE_TAG} .
 
@@ -77,10 +76,10 @@ pipeline {
                 sh '''
                     docker tag \
                         ${IMAGE_NAME}:${IMAGE_TAG} \
-                        ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        ${PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
 
                     echo "Image tagged as:"
-                    echo "${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                    echo "${PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
                 '''
             }
         }
@@ -91,7 +90,7 @@ pipeline {
 
                 sh '''
                     docker push \
-                        ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        ${PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
 
                     echo "Image successfully pushed to local registry."
                 '''
@@ -104,7 +103,7 @@ pipeline {
 
                 sh '''
                     docker pull \
-                        ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        ${PUSH_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
 
                     echo "Registry image verified successfully."
                 '''
@@ -120,7 +119,7 @@ pipeline {
                         ${HELM_RELEASE} \
                         ./helm/enterprise-app \
                         -n ${K8S_NAMESPACE} \
-                        --set image.repository=${REGISTRY}/${IMAGE_NAME} \
+                        --set image.repository=${K8S_REGISTRY}/${IMAGE_NAME} \
                         --set image.tag=${IMAGE_TAG} \
                         --set image.pullPolicy=Always
 
