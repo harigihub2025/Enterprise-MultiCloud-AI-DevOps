@@ -4,8 +4,11 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'enterprise-devops-app'
+        REGISTRY = 'kind-registry:5000'
         IMAGE_TAG = "${BUILD_NUMBER}"
+
         KUBECONFIG = '/tmp/kind-config'
+
         HELM_RELEASE = 'enterprise-helm'
         K8S_NAMESPACE = 'enterprise-platform'
     }
@@ -15,7 +18,9 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo '===== CHECKOUT SOURCE CODE ====='
+
                 checkout scm
+
                 echo 'Source code checkout completed successfully.'
             }
         }
@@ -44,12 +49,11 @@ pipeline {
 
                 sh '''
                     echo "Building Docker image..."
-                    echo "Image: ${IMAGE_NAME}:${IMAGE_TAG}"
 
                     docker build \
                         -t ${IMAGE_NAME}:${IMAGE_TAG} .
 
-                    echo "Docker image build completed successfully."
+                    echo "Docker build completed."
                 '''
             }
         }
@@ -66,19 +70,59 @@ pipeline {
             }
         }
 
+        stage('Tag Image') {
+            steps {
+                echo '===== TAG IMAGE FOR LOCAL REGISTRY ====='
+
+                sh '''
+                    docker tag \
+                        ${IMAGE_NAME}:${IMAGE_TAG} \
+                        ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+
+                    echo "Image tagged as:"
+                    echo "${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                '''
+            }
+        }
+
+        stage('Push Image') {
+            steps {
+                echo '===== PUSH IMAGE TO LOCAL REGISTRY ====='
+
+                sh '''
+                    docker push \
+                        ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+
+                    echo "Image successfully pushed to local registry."
+                '''
+            }
+        }
+
+        stage('Verify Registry Image') {
+            steps {
+                echo '===== VERIFY REGISTRY IMAGE ====='
+
+                sh '''
+                    docker pull \
+                        ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+
+                    echo "Registry image verified successfully."
+                '''
+            }
+        }
+
         stage('Helm Deploy') {
             steps {
                 echo '===== HELM DEPLOYMENT ====='
 
                 sh '''
-                    echo "Deploying application using Helm..."
-
                     helm upgrade --install \
                         ${HELM_RELEASE} \
                         ./helm/enterprise-app \
                         -n ${K8S_NAMESPACE} \
-                        --set image.repository=${IMAGE_NAME} \
-                        --set image.tag=${IMAGE_TAG}
+                        --set image.repository=${REGISTRY}/${IMAGE_NAME} \
+                        --set image.tag=${IMAGE_TAG} \
+                        --set image.pullPolicy=Always
 
                     echo "Helm deployment completed."
                 '''
@@ -90,7 +134,7 @@ pipeline {
                 echo '===== KUBERNETES VERIFICATION ====='
 
                 sh '''
-                    echo "Waiting for Kubernetes deployment rollout..."
+                    echo "Waiting for Kubernetes rollout..."
 
                     kubectl rollout status \
                         deployment/${HELM_RELEASE} \
@@ -132,9 +176,10 @@ pipeline {
               CI/CD PIPELINE COMPLETED SUCCESSFULLY
             ==========================================
               Application : Enterprise Multi-Cloud AI DevOps Platform
-              Docker     : Build Successful
-              Helm       : Deployment Successful
-              Kubernetes : Rollout Successful
+              Docker      : Build Successful
+              Registry    : Image Push Successful
+              Helm        : Deployment Successful
+              Kubernetes  : Rollout Successful
             ==========================================
             '''
         }
@@ -144,7 +189,7 @@ pipeline {
             ==========================================
               CI/CD PIPELINE FAILED
             ==========================================
-              Check the Jenkins console logs
+              Check Jenkins console logs
               for the failed stage.
             ==========================================
             '''
